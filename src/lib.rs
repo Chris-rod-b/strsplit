@@ -1,15 +1,22 @@
 #![warn(missing_debug_implementations, rust_2018_idioms)]
 
 #[derive(Debug)]
-pub struct StrSplit<'a> {
-    remainder: Option<&'a str>, //short lifetime 
-    delimiter: &'a str,
+pub struct StrSplit<'heystack, D> {
+    remainder: Option<&'heystack str>, //short lifetime 
+    delimiter: D,
 }
+/*  str -> [char] Collection of chars, we don't know how long its
+    &str -> &[char] Point for a sequence of characters
+    String -> Vec<char> heap-allocated
 
-impl<'a> StrSplit<'a> { //type inference
+    String -> &str (cheap -- AsRef)
+    &str -> String (expensive -- mempcy)
+*/
+
+impl<'heystack, D> StrSplit<'heystack, D> { //type inference
     //haystack, usually the thing you are search in
     //delimiter, the thing we are spliting by
-    pub fn new (haystack: &'a str, delimiter: &'a str) -> Self {
+    pub fn new (haystack: &'heystack str, delimiter: D) -> Self {
         Self {
             remainder: Some(haystack),
             delimiter,
@@ -17,17 +24,26 @@ impl<'a> StrSplit<'a> { //type inference
     }  
 }
 
-impl<'a> Iterator for StrSplit<'a> {
-    type Item = &'a str;
+pub trait Delimiter {
+    fn find_next(&self, s: &str) -> Option<(usize, usize)>;
+}
+
+impl<'heystack, D> Iterator for StrSplit<'heystack, D> 
+where 
+    D: Delimiter 
+{
+    type Item = &'heystack str;
+
     fn next(&mut self) -> Option<Self::Item> {
         let remainder = self.remainder.as_mut()?;
         // impl<T> Option<T> { fn as_mut(&mut self) -> Option<&mut T> }
         
-        if let Some(next_delim) = remainder.find(self.delimiter) {
-            let until_delimiter = &remainder[..next_delim];
+        //Try to use match {} 
+        if let Some((delim_start, delim_end)) = self.delimiter.find_next(&remainder) { 
+            let until_delimiter = &remainder[..delim_start];
             //extract the stuff until the next row delimiter and then we set 
             //the remainder to be everything passed that remainder
-            *remainder = &remainder[(next_delim + self.delimiter.len())..];
+            *remainder = &remainder[delim_end..];
             Some(until_delimiter)
         } else {
             self.remainder.take()
@@ -35,6 +51,29 @@ impl<'a> Iterator for StrSplit<'a> {
         }
     }
 }
+
+impl Delimiter for &str {
+    fn find_next(&self, s: &str) -> Option<(usize, usize)> {
+        s.find(self).map(|start| (start, start + self.len()))    
+    }
+}
+
+// impl Delimiter for char {
+//     fn find_next(&self, s: &str) -> Option<(usize, usize)> {
+//         s.chars()
+//             .position(|(i, c)| c == *self)
+//             .map(|start, _| (start, start + 1)
+//         )    
+//     }
+// }
+
+pub fn until_char(s: &str, c: char) -> &'_ str { //it's not required lifetime 
+    let delim = format!("{}", c);
+    StrSplit::new(s, &*delim)
+        .next()
+        .expect("StrSplit always gives at least one result")
+}
+            
 /* 
     self.remainder = ""; 
     static lifetime, during until the end of the program
@@ -43,7 +82,11 @@ impl<'a> Iterator for StrSplit<'a> {
     &'static str -> &'a str => not ok
 
 */
-            
+#[test]
+fn until_char_test() {
+    assert_eq!(until_char("hello world",'o'), "hell");
+}
+
 #[test]
 fn it_works() {
     let haystack = "a b c d e";
