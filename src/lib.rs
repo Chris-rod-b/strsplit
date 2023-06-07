@@ -58,14 +58,14 @@ impl Delimiter for &str {
     }
 }
 
-// impl Delimiter for char {
-//     fn find_next(&self, s: &str) -> Option<(usize, usize)> {
-//         s.chars()
-//             .position(|(i, c)| c == *self)
-//             .map(|start, _| (start, start + 1)
-//         )    
-//     }
-// }
+// We could do better
+impl Delimiter for char {
+    fn find_next(&self, s: &str) -> Option<(usize, usize)> {
+        s.char_indices()
+            .find(|(_, c)| c == self)
+            .map(|(start, _)| (start, start + self.len_utf8()))    
+    }
+}
 
 pub fn until_char(s: &str, c: char) -> &'_ str { //it's not required lifetime 
     let delim = format!("{}", c);
