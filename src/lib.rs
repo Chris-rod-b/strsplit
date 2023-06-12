@@ -1,5 +1,7 @@
 #![warn(missing_debug_implementations, rust_2018_idioms)]
 
+use std::mem;
+
 #[derive(Debug)]
 pub struct StrSplit<'heystack, D> {
     remainder: Option<&'heystack str>, //short lifetime 
@@ -82,6 +84,43 @@ pub fn until_char(s: &str, c: char) -> &'_ str { //it's not required lifetime
     &'static str -> &'a str => not ok
 
 */
+
+//Second way of implementation
+struct Splitter<'a> {
+    haystack: &'a str,
+    delimiter: &'a str,
+}
+
+impl<'a> Iterator for Splitter<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.haystack.find(self.delimiter) {
+            Some(index) => {
+                let item = &self.haystack[..index];
+                self.haystack = &self.haystack[(index + self.delimiter.len())..];
+                Some(item)
+            }
+            None => {
+                if !self.haystack.is_empty() {
+                    return Some(mem::take(&mut self.haystack));
+                }
+                None
+            }
+        }
+    }
+}
+
+#[test]
+fn comma() {
+    let split: Vec<&str> = Splitter {
+        haystack: "a,b,c,d",
+        delimiter: ",",
+    }
+    .collect();
+    assert_eq!(split, vec!["a", "b", "c", "d"]);
+}    
+
 #[test]
 fn until_char_test() {
     assert_eq!(until_char("hello world",'o'), "hell");
